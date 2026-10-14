@@ -1,4 +1,14 @@
-import { Plugin } from "obsidian";
+import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
+
+interface SColorInlineSettings {
+	// true: color the whole inline code badge; false: small swatch box next to the text
+	badgeMode: boolean;
+}
+
+const DEFAULT_SETTINGS: SColorInlineSettings = { badgeMode: false };
+
+// Body class that switches styles.css between swatch and badge mode
+const BADGE_CLASS = "s-color-inline-badge";
 
 // CodeMirror 6 (Live Preview)
 import { EditorView, Decoration } from "@codemirror/view";
@@ -31,7 +41,7 @@ function CreateColorSwatchExtension() {
 
 				const deco = Decoration.mark({
 					class: "color-swatch-mark",
-					attributes: { style: `--color-swatch: ${color};` },
+					attributes: { style: `--color-swatch: ${color}; --color-swatch-text: ${textColorFor(color)};` },
 				});
 
 				builder.add(from, to, deco);
@@ -40,6 +50,15 @@ function CreateColorSwatchExtension() {
 
 		return builder.finish();
 	});
+}
+
+// Black or white text, whichever reads better on the given rgb()/rgba() color.
+// Mostly transparent colors keep the theme's code text color.
+function textColorFor(color: string): string {
+	const n = color.match(/[0-9.]+/g)?.map(Number) ?? [];
+	const [r = 0, g = 0, b = 0, a = 1] = n;
+	if (a < 0.5) return "var(--code-normal)";
+	return (r * 299 + g * 587 + b * 114) / 1000 >= 128 ? "#000" : "#fff";
 }
 
 function clamp01(v: number): number {
@@ -180,7 +199,13 @@ function parseColorLiteral(text: string): string | null {
 }
 
 export default class InlineColorSwatchPlugin extends Plugin {
-	public onload(): void {
+	settings: SColorInlineSettings = DEFAULT_SETTINGS;
+
+	public async onload(): Promise<void> {
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.applyMode();
+		this.addSettingTab(new SColorInlineSettingTab(this.app, this));
+
 		// Reading view (rendered HTML) and Live Preview (CodeMirror 6)
 		this.registerMarkdownPostProcessor((el) => {
 			const codeEls = el.querySelectorAll("code:not(pre code)");
@@ -195,6 +220,11 @@ export default class InlineColorSwatchPlugin extends Plugin {
 				const color = parseColorLiteral(text);
 				if (!color) return;
 
+				// Both modes are always rendered; the body class decides which one shows
+				codeEl.addClass("s-color-inline");
+				codeEl.style.setProperty("--color-swatch", color);
+				codeEl.style.setProperty("--color-swatch-text", textColorFor(color));
+
 				const swatch = document.createElement("span");
 				swatch.className = "inline-color-swatch";
 				swatch.style.backgroundColor = color;
@@ -208,5 +238,39 @@ export default class InlineColorSwatchPlugin extends Plugin {
 	}
 
 	public onunload(): void {
+		document.body.removeClass(BADGE_CLASS);
+	}
+
+	applyMode(): void {
+		document.body.toggleClass(BADGE_CLASS, this.settings.badgeMode);
+	}
+
+	async saveSettings(): Promise<void> {
+		await this.saveData(this.settings);
+		this.applyMode();
+	}
+}
+
+class SColorInlineSettingTab extends PluginSettingTab {
+	plugin: InlineColorSwatchPlugin;
+
+	constructor(app: App, plugin: InlineColorSwatchPlugin) {
+		super(app, plugin);
+		this.plugin = plugin;
+	}
+
+	display(): void {
+		const { containerEl } = this;
+		containerEl.empty();
+
+		new Setting(containerEl)
+			.setName("Color the whole badge")
+			.setDesc("On: the inline code background takes the color. Off: a small swatch box sits next to the code.")
+			.addToggle((toggle) =>
+				toggle.setValue(this.plugin.settings.badgeMode).onChange(async (value) => {
+					this.plugin.settings.badgeMode = value;
+					await this.plugin.saveSettings();
+				})
+			);
 	}
 }

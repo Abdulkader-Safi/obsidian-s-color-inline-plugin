@@ -22,3 +22,28 @@
 	box-shadow: 0 0 0 1px rgba(0,0,0,0.16) inset;
 	outline-offset: -1px;
 }
+
+/* Badge mode: color the whole inline code instead of showing a swatch box */
+body.s-color-inline-badge .inline-color-swatch,
+body.s-color-inline-badge .cm-inline-code .color-swatch-mark::after {
+	display: none !important;
+}
+
+body.s-color-inline-badge code.s-color-inline {
+	background-color: var(--color-swatch) !important;
+	color: var(--color-swatch-text) !important;
+}
+
+/* Live Preview: the theme pads and colors the .cm-inline-code wrapper,
+   so move that padding onto the mark and give it the color */
+body.s-color-inline-badge .cm-inline-code:has(> .color-swatch-mark) {
+	background-color: transparent !important;
+	padding: 0 !important;
+}
+
+body.s-color-inline-badge .cm-inline-code .color-swatch-mark {
+	background-color: var(--color-swatch);
+	color: var(--color-swatch-text);
+	padding: 0.1em 0.25em;
+	border-radius: var(--code-radius, 4px);
+}
