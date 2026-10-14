@@ -202,7 +202,7 @@ export default class InlineColorSwatchPlugin extends Plugin {
 	settings: SColorInlineSettings = DEFAULT_SETTINGS;
 
 	public async onload(): Promise<void> {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, (await this.loadData()) as Partial<SColorInlineSettings> | null);
 		this.applyMode();
 		this.addSettingTab(new SColorInlineSettingTab(this.app, this));
 
@@ -211,7 +211,7 @@ export default class InlineColorSwatchPlugin extends Plugin {
 			const codeEls = el.querySelectorAll("code:not(pre code)");
 
 			codeEls.forEach((codeEl) => {
-				if (!(codeEl instanceof HTMLElement)) return;
+				if (!codeEl.instanceOf(HTMLElement)) return;
 
 				const existing = codeEl.querySelector(".inline-color-swatch");
 				if (existing) return;
@@ -222,27 +222,40 @@ export default class InlineColorSwatchPlugin extends Plugin {
 
 				// Both modes are always rendered; the body class decides which one shows
 				codeEl.addClass("s-color-inline");
-				codeEl.style.setProperty("--color-swatch", color);
-				codeEl.style.setProperty("--color-swatch-text", textColorFor(color));
-
-				const swatch = document.createElement("span");
-				swatch.className = "inline-color-swatch";
-				swatch.style.backgroundColor = color;
-				swatch.setAttribute("aria-label", `Color swatch ${color}`);
-
-				codeEl.appendChild(swatch);
+				codeEl.setCssProps({
+					"--color-swatch": color,
+					"--color-swatch-text": textColorFor(color),
+				});
+				codeEl.createSpan({
+					cls: "inline-color-swatch",
+					attr: { "aria-label": `Color swatch ${color}` },
+				});
 			});
 		});
 
 		this.registerEditorExtension(CreateColorSwatchExtension());
+
+		// Popout windows have their own <body>
+		this.registerEvent(this.app.workspace.on("window-open", (win) => {
+			win.doc.body.toggleClass(BADGE_CLASS, this.settings.badgeMode);
+		}));
 	}
 
 	public onunload(): void {
-		document.body.removeClass(BADGE_CLASS);
+		this.setBadgeClass(false);
 	}
 
 	applyMode(): void {
-		document.body.toggleClass(BADGE_CLASS, this.settings.badgeMode);
+		this.setBadgeClass(this.settings.badgeMode);
+	}
+
+	// Toggle the mode class on the main window and every popout window
+	private setBadgeClass(on: boolean): void {
+		const bodies = new Set<HTMLElement>([document.body]);
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			bodies.add(leaf.view.containerEl.doc.body);
+		});
+		bodies.forEach((body) => body.toggleClass(BADGE_CLASS, on));
 	}
 
 	async saveSettings(): Promise<void> {
