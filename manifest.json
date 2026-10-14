@@ -1,0 +1,10 @@
+{
+	"id": "s-color-inline",
+	"name": "S-Color-Inline",
+	"version": "1.0.0",
+	"minAppVersion": "1.12.4",
+	"description": "Show color swatches next to CSS color values in inline code.",
+	"author": "Abdulkader Safi",
+	"authorUrl": "https://github.com/Abdulkader-Safi",
+	"isDesktopOnly": false
+}
